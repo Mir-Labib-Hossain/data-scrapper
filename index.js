@@ -1,29 +1,27 @@
-// npm run scrap
-// http://localhost:8000/
+// node index.js
+// check console
 
-const PORT = 8000;
 const axios = require("axios");
 const cheerio = require("cheerio");
-const express = require("express");
-const res = require("express/lib/response");
 const connection = require("./database");
-const app = express();
 
-//
-// scrapping symbol list
-//
-const url_symbol_list = "https://www.dse.com.bd/latest_share_price_scroll_l.php";
-let symbol_list = [];
-axios(url_symbol_list).then((res) => {
+const fetchSymbolList = async () => {
+  const url_symbol_list = "https://www.dse.com.bd/latest_share_price_scroll_l.php";
+  let symbol_list = [];
+  let res = await axios(url_symbol_list);
   const html = res.data;
   const $ = cheerio.load(html);
+  symbol_details_promises = [];
+  
+  
   $(".table-responsive>table>tbody>tr", html).each(function () {
     let each_data_arr = $(this).text().trim().replace(/\s\s+/g, " ").replace(/,/g, "").split(" ");
     symbol_list.push(each_data_arr);
     // break
     if (each_data_arr[0] === "386") return false;
   });
-});
+  return symbol_list;
+};
 
 const fetchSymbolDetails = async (symbol, i) => {
   let headers = [];
@@ -369,75 +367,80 @@ const fetchSymbolDetails = async (symbol, i) => {
 };
 
 const insertFetchedData = async () => {
-  var symbol_list_insert_query = "INSERT INTO symbol_list (id, trading_code, ltp, high, low, closep, ycp, cng, trade, value, volume) VALUES";
-  var symbol_details_insert_query = "INSERT INTO symbol_details ( symbol, data) VALUES";
+  let symbol_list_insert_query = "INSERT INTO symbol_list (id, trading_code, ltp, high, low, closep, ycp, cng, trade, value, volume) VALUES";
+  let symbol_details_insert_query = "INSERT INTO symbol_details ( symbol, data) VALUES";
+
+  const symbol_list = await fetchSymbolList();
+
   const len = symbol_list.length;
+
   for (let i = 0; i < len; i++) {
     let jsonData = await fetchSymbolDetails(symbol_list[i][1], i);
+
     symbol_list_insert_query += "('" + symbol_list[i].join("','") + "')";
     symbol_details_insert_query += "('" + symbol_list[i][1] + "','" + jsonData + "')";
+
     if (i === len - 1) break;
+
     symbol_list_insert_query += ",";
     symbol_details_insert_query += ",";
   }
+
   console.log("Fetching complete 🎉");
   console.log("⏳ INSERTING . . .");
 
-  combined_query = symbol_list_insert_query + "; " + symbol_details_insert_query;
+  const combined_query = symbol_list_insert_query + "; " + symbol_details_insert_query;
   connection.query(combined_query, function (err, result) {
     if (err) console.log(err);
     else console.log(symbol_list.length + " records inserted 🎉");
+    connection.end();
   });
 };
 
-app.get("/update", (req, res) => {
-  var check_date_query = "SELECT TO_CHAR(fetched_on, 'DD/MM/YYYY') as fetched_on FROM symbol_list ORDER BY id DESC LIMIT 1;";
+const updateDB = async () => {
+  const check_date_query = "SELECT TO_CHAR(fetched_on, 'DD/MM/YYYY') as fetched_on FROM symbol_list ORDER BY id DESC LIMIT 1;";
   connection.query(check_date_query, function (err, result) {
     if (err) console.log(err);
     else {
-      let last_fetched_on = result.rows[0].fetched_on;
-      let today_date = new Date();
-      let dd = String(today_date.getDate()).padStart(2, "0");
-      let mm = String(today_date.getMonth() + 1).padStart(2, "0"); //January is 0!
-      let yyyy = today_date.getFullYear();
-      today_date = dd + "/" + mm + "/" + yyyy;
-      console.log(today_date + " =? " + last_fetched_on);
-
-      if (today_date !== last_fetched_on) {
-        res.send("Updating . . .");
-        console.log("Updating");
-        insertFetchedData();
+      if (result.rows.length) {
+        last_fetched_on = result.rows[0].fetched_on;
+        today_date = new Date();
+        let dd = String(today_date.getDate()).padStart(2, "0");
+        let mm = String(today_date.getMonth() + 1).padStart(2, "0"); //January is 0!
+        let yyyy = today_date.getFullYear();
+        today_date = dd + "/" + mm + "/" + yyyy;
+      }
+      if (!result.rows.length || today_date !== last_fetched_on){
+      console.log("⏳ Updating . . .");
+      insertFetchedData();
       } else {
-        res.send("Already up to date !<br> <a href = '/'>Go back</a>");
-        console.log("Already up to date");
+        console.log("Already up to date - " + last_fetched_on);
+        connection.end();
       }
     }
   });
+};
+
+connection.connect((err) => {
+  if (err) console.log(err);
+  console.log("DB connected 🤝");
+  updateDB();
 });
 
-app.get("/:symbol", function (req, res) {
-  let symbol = req.params.symbol;
-  res.send(symbol);
-});
 
-app.get("/", function (req, res) {
-  let str = "<a href = '/update'>UPDATE DB</a><br><table>  <tr> <th>#</th> <th>TRADING CODE</th> <th>LTP*</th> <th>HIGH</th> <th>LOW</th> <th>CLOSEP*</th> <th>YCP*</th> <th>CHANGE</th> <th>TRADE</th> <th>VALUE (mn)</th> <th>VOLUME</th> </tr> ";
-  for (let i = 0; i < symbol_list.length; i++) {
-    str += "<tr>";
-    for (let j = 0; j < symbol_list[i].length; j++) {
-      if (j == 1) str += "<td><a href='" + symbol_list[i][1] + "'>" + symbol_list[i][j] + "</a></td>";
-      else str += "<td>" + symbol_list[i][j] + "</td>";
-    }
-    str += " <tr>";
+
+const test = async () => {
+  console.time("test");
+  symbol_list = await fetchSymbolList();
+  symbol_details_promises = [];
+  for (x = 0; x < 10; x++) {
+    symbol_details_promises.push(axios.get("https://www.dse.com.bd/displayCompany.php?name=" + symbol_list[x][1]));
   }
-  str += "</table>";
-  res.send(str);
-});
 
-app.listen(PORT, () => {
-  connection.connect((err) => {
-    if (err) console.log(err);
-    console.log("DB connected 🤝");
-  });
-  console.log(`Server running on PORT ${PORT} 🚀`);
-});
+  const res = await Promise.allSettled(symbol_details_promises);
+
+  console.log(res.length, res[9]);
+  console.timeEnd("test");
+  connection.end();
+};
+// test();
