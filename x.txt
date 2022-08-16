@@ -1,12 +1,17 @@
 // node index.js
 // check console
-
 const axios = require("axios");
 const cheerio = require("cheerio");
-const { connect } = require("mongoose");
 const connection = require("./database");
 
-let last
+const recursiveFetch = (undefinedResponses) => {
+  
+
+  
+  if (undefinedResponses.length > 0) {
+    recursiveFetch(newNumber);
+  }
+};
 
 const insertToDB = (symbol_list_insert_query, symbol_details_insert_query) => {
   console.log("⏳ Inserting . . .");
@@ -34,19 +39,20 @@ const fetchSymbolList = async () => {
 
   $(".table-responsive>table>tbody>tr", symbol_list_html).each(function (index) {
     let each_symbol_row = $(this).text().trim().replace(/\s\s+/g, " ").replace(/,/g, "").split(" ");
-
     if (each_symbol_row[0] === "If") {
       return false;
     }
     symbol_list_insert_query += "('" + each_symbol_row.join("','") + "')";
     symbol_list.push(each_symbol_row[1]);
-    symbol_details_promises.push(axios.get("https://www.dse.com.bd/displayCompany.php?name=" + each_symbol_row[1]));
+    symbol_details_promises.push(axios.get("https://www.dse.com.bd/displayCompany.php?name=" + each_symbol_row[1],{
+      
+    }));
     symbol_list_insert_query += ",";
   });
+  // remove last comma from query
   symbol_list_insert_query = symbol_list_insert_query.substring(0, symbol_list_insert_query.length - 1);
 
   console.log("🎉 Fetched List");
-  
 
   let symbol_details_insert_query = "INSERT INTO symbol_details ( symbol, data) VALUES";
   const symbol_details_array = await Promise.allSettled(symbol_details_promises);
@@ -59,19 +65,19 @@ const fetchSymbolList = async () => {
       console.log(symbol_details_array[i]);
       break;
     }
+    if (symbol_details_array[i]?.value?.data === undefined) {
+      console.log(symbol_details_array[i]);
+      break;
+    }
+    console.log(symbol_list[i]);
     console.log(i + " " + symbol_list[i]);
     const symbol_details_html = symbol_details_array[i].value.data;
-    let jsonData = makeJSON(symbol_details_html);
-    
-    symbol_details_insert_query += "('" + symbol_list[i] + "','" + jsonData + "')";
+    let jsonData = await makeJSON(symbol_details_html);
+
+     symbol_details_insert_query += "('" + symbol_list[i] + "','" + jsonData + "')";
     if (i === symbol_details_len - 1) break;
     symbol_details_insert_query += ",";
   }
-// console.log(symbol_list_insert_query);
-// console.log("xyxyxyxyxyyxyxyxyxyxyxyxyxyxyx");
-// console.log("xyxyxyxyxyyxyxyxyxyxyxyxyxyxyx");
-// console.log("xyxyxyxyxyyxyxyxyxyxyxyxyxyxyx");
-// console.log(symbol_details_insert_query);
 
   // insertToDB(symbol_list_insert_query, symbol_details_insert_query);
 };
@@ -409,7 +415,7 @@ const makeJSON = async (html) => {
         break;
     }
   });
-  console.log(JSON.stringify(symbol_details));
+  console.log(symbol_details.company_info.trading_code);
   return JSON.stringify(symbol_details);
 };
 
@@ -441,19 +447,3 @@ connection.connect((err) => {
   console.log("DB connected 🤝");
   updateDB();
 });
-
-const test = async () => {
-  console.time("test");
-  symbol_list = await fetchSymbolList();
-  symbol_details_promises = [];
-  for (x = 0; x < 10; x++) {
-    symbol_details_promises.push(axios.get("https://www.dse.com.bd/displayCompany.php?name=" + symbol_list[x][1]));
-  }
-
-  const res = await Promise.allSettled(symbol_details_promises);
-
-  console.log(res.length, res[9]);
-  console.timeEnd("test");
-  connection.end();
-};
-// test();
