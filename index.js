@@ -48,7 +48,8 @@ const fetchSymbolList = async () => {
     if (each_symbol_row[0] === "If") {
       return false;
     }
-     let change = parseFloat(each_symbol_row[7])===NaN ? parseFloat(each_symbol_row[7]):null
+     let change =isNaN(each_symbol_row[7])? null:parseFloat(each_symbol_row[7])
+     console.log(change);
     symbol_list_insert_query += "("+parseInt(each_symbol_row[0])+",'"+each_symbol_row[1]+"',"+parseFloat(each_symbol_row[2])+", "+parseFloat(each_symbol_row[3])+", "+parseFloat(each_symbol_row[4])+", "+parseFloat(each_symbol_row[5])+", "+parseFloat(each_symbol_row[6])+", "+change+", "+parseFloat(each_symbol_row[8])+", "+parseFloat(each_symbol_row[9])+", "+parseFloat(each_symbol_row[10])+ ")";
     symbol_list_insert_query += ",";
     symbol_list.push(each_symbol_row[1]);
