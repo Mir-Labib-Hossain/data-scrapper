@@ -401,7 +401,7 @@ const insertToDB = (symbolListQuery, symbolDetailsQuery) => {
 
 const fetchSymbolList = async () => {
   console.time("🎉 Fetching complete");
-  console.log("⏳ Fetching . . .");
+  console.log("⏳ Fetching List . . .");
   let symbolListHtml;
   let $;
   const symbolListUrl = "https://www.dse.com.bd/latest_share_price_scroll_l.php";
@@ -424,7 +424,7 @@ const fetchSymbolList = async () => {
 
   console.log("🎉 Fetched List");
   symbolListInsertQuery = trimQuery(symbolListInsertQuery);
-
+  console.log("⏳ Fetching Details . . .");
   await recursiveFetch(symbolList, 0);
   console.timeEnd("🎉 Fetching complete");
   symbolDetailsInsertQuery = trimQuery(symbolDetailsInsertQuery);

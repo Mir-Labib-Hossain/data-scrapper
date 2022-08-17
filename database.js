@@ -6,9 +6,5 @@ var connection = new Client({
     user:"root",
     password:"123456",
     multipleStatements: true
-
 })
-
 module.exports = connection
-
- 
