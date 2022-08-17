@@ -3,80 +3,14 @@
 
 const axios = require("axios");
 const cheerio = require("cheerio");
-const { connect } = require("mongoose");
 const connection = require("./database");
 
-let last
+let symbolListInsertQuery = "INSERT INTO test_symbol_list (id, trading_code, ltp, high, low, closep, ycp, cng, trade, value, volume) VALUES";
+let symbolDetailsInsertQuery = "INSERT INTO test_symbol_details ( symbol, data) VALUES";
 
-const insertToDB = (symbol_list_insert_query, symbol_details_insert_query) => {
-  console.log("⏳ Inserting . . .");
-  const combined_query = symbol_list_insert_query + "; " + symbol_details_insert_query;
-  connection.query(combined_query, function (err, result) {
-    if (err) console.log(err);
-    else console.log(symbol_list.length + " records inserted 🎉");
-    connection.end();
-    console.log("⏳ Inserted . . .");
-  });
-};
+let symbolList = [];
 
-const fetchSymbolList = async () => {
-  console.time("🎉 Fetching complete");
-  console.log("⏳ Fetching . . .");
-
-  const url_symbol_list = "https://www.dse.com.bd/latest_share_price_scroll_l.php";
-  let symbol_list = [];
-  let res = await axios(url_symbol_list);
-  const symbol_list_html = res?.data;
-  const $ = cheerio.load(symbol_list_html);
-  symbol_details_promises = [];
-
-  let symbol_list_insert_query = "INSERT INTO symbol_list (id, trading_code, ltp, high, low, closep, ycp, cng, trade, value, volume) VALUES";
-
-  $(".table-responsive>table>tbody>tr", symbol_list_html).each(function (index) {
-    let each_symbol_row = $(this).text().trim().replace(/\s\s+/g, " ").replace(/,/g, "").split(" ");
-
-    if (each_symbol_row[0] === "If") {
-      return false;
-    }
-    symbol_list_insert_query += "('" + each_symbol_row.join("','") + "')";
-    symbol_list.push(each_symbol_row[1]);
-    symbol_details_promises.push(axios.get("https://www.dse.com.bd/displayCompany.php?name=" + each_symbol_row[1]));
-    symbol_list_insert_query += ",";
-  });
-  symbol_list_insert_query = symbol_list_insert_query.substring(0, symbol_list_insert_query.length - 1);
-
-  console.log("🎉 Fetched List");
-  
-
-  let symbol_details_insert_query = "INSERT INTO symbol_details ( symbol, data) VALUES";
-  const symbol_details_array = await Promise.allSettled(symbol_details_promises);
-  const symbol_details_len = symbol_details_array.length;
-  console.timeEnd("🎉 Fetching complete");
-  console.log("⏳ Making JSON . . .");
-
-  for (let i = 0; i < symbol_details_len; i++) {
-    if (symbol_details_array[i]?.value?.data === undefined) {
-      console.log(symbol_details_array[i]);
-      break;
-    }
-    console.log(i + " " + symbol_list[i]);
-    const symbol_details_html = symbol_details_array[i].value.data;
-    let jsonData = makeJSON(symbol_details_html);
-    
-    symbol_details_insert_query += "('" + symbol_list[i] + "','" + jsonData + "')";
-    if (i === symbol_details_len - 1) break;
-    symbol_details_insert_query += ",";
-  }
-// console.log(symbol_list_insert_query);
-// console.log("xyxyxyxyxyyxyxyxyxyxyxyxyxyxyx");
-// console.log("xyxyxyxyxyyxyxyxyxyxyxyxyxyxyx");
-// console.log("xyxyxyxyxyyxyxyxyxyxyxyxyxyxyx");
-// console.log(symbol_details_insert_query);
-
-  // insertToDB(symbol_list_insert_query, symbol_details_insert_query);
-};
-
-const makeJSON = async (html) => {
+const makeJSON = async (html, symbol) => {
   let headers = [];
   let symbol_details = {
     company_info: {},
@@ -89,29 +23,29 @@ const makeJSON = async (html) => {
     other_info: {},
   };
 
-  function filterTableData(data) {
+  const filterTableData = (data) => {
     return data
       .replace(/<\/?[^>]+(>|$)/g, "   ")
       .replace("'", "")
       .split("   ");
-  }
+  };
 
-  function toNum(data) {
+  const toNum = (data) => {
     return parseFloat(data.replace(/,/g, ""));
-  }
+  };
 
   const $ = cheerio.load(html);
 
-  $(".topBodyHead", html).each(function () {
-    headers.push($(this).text().trim());
+  $(".topBodyHead", html).each((index, element) => {
+    headers.push($(element).text().trim());
   });
 
-  $("#company", html).each(function (index) {
-    let eachTable = $(this).html().trim().replace(/\s\s+/g, " ");
+  $("#company", html).each((index, element) => {
+    let eachTable = $(element).html().trim().replace(/\s\s+/g, " ");
     switch (index) {
       case 0:
-        $("tr", eachTable).each(function () {
-          let data = $(this).text().trim().split(" ");
+        $("tr", eachTable).each((index, element) => {
+          let data = $(element).text().trim().split(" ");
           symbol_details.company_info.name = headers[index].split(": ")[1];
           symbol_details.company_info.trading_code = data[2];
           symbol_details.company_info.scrip_code = parseInt(data[5]);
@@ -119,8 +53,8 @@ const makeJSON = async (html) => {
         break;
 
       case 1:
-        $("tbody", eachTable).each(function () {
-          let data = filterTableData($(this).html());
+        $("tbody", eachTable).each((index, element) => {
+          let data = filterTableData($(element).html());
 
           symbol_details.market_info.last_trading_price = toNum(data[4]);
           symbol_details.market_info.closing_price = toNum(data[8]);
@@ -150,8 +84,8 @@ const makeJSON = async (html) => {
         break;
 
       case 2:
-        $("tbody", eachTable).each(function () {
-          let data = filterTableData($(this).html());
+        $("tbody", eachTable).each((index, element) => {
+          let data = filterTableData($(element).html());
 
           symbol_details.basic_info.authorized_capital_MN = toNum(data[4]);
           symbol_details.basic_info.debut_trading_date = data[9];
@@ -166,8 +100,8 @@ const makeJSON = async (html) => {
         break;
 
       case 5:
-        $("tbody", eachTable).each(function (index) {
-          let data = filterTableData($(this).html());
+        $("tbody", eachTable).each((index, element) => {
+          let data = filterTableData($(element).html());
 
           symbol_details.pe_unaudited = [
             {
@@ -234,8 +168,8 @@ const makeJSON = async (html) => {
         break;
 
       case 6:
-        $("tbody", eachTable).each(function (index) {
-          let data = filterTableData($(this).html());
+        $("tbody", eachTable).each((index, element) => {
+          let data = filterTableData($(element).html());
           symbol_details.pe_audited = [
             {
               particulars: data[19],
@@ -301,8 +235,8 @@ const makeJSON = async (html) => {
         break;
 
       case 7:
-        $("tbody", eachTable).each(function () {
-          data = $(this)
+        $("tbody", eachTable).each((index, element) => {
+          data = $(element)
             .html()
             .replace(/<tr>/g, "   ")
             .replace(/<\/?[^>]+(>|$)/g, "")
@@ -335,8 +269,8 @@ const makeJSON = async (html) => {
         break;
 
       case 8:
-        $("tbody", eachTable).each(function () {
-          data = $(this)
+        $("tbody", eachTable).each((index, element) => {
+          data = $(element)
             .html()
             .replace(/<tr>/g, "    ")
             .replace(/<\/?[^>]+(>|$)/g, "")
@@ -364,8 +298,8 @@ const makeJSON = async (html) => {
         break;
 
       case 10:
-        $("tbody", eachTable).each(function (index) {
-          let data = filterTableData($(this).html().replaceAll(" Share Holding Percentage [as on ", "").replace("]", ""));
+        $("tbody", eachTable).each((index, element) => {
+          let data = filterTableData($(element).html().replaceAll(" Share Holding Percentage [as on ", "").replace("]", ""));
 
           symbol_details.other_info.listing_year = toNum(data[4]);
           symbol_details.other_info.market_category = data[11].trim();
@@ -409,27 +343,111 @@ const makeJSON = async (html) => {
         break;
     }
   });
-  console.log(JSON.stringify(symbol_details));
   return JSON.stringify(symbol_details);
 };
 
+const appendToInsertListQuery = (eachSymbolRow) => {
+  let change = isNaN(eachSymbolRow[7]) ? null : parseFloat(eachSymbolRow[7]);
+  symbolListInsertQuery += "(" + parseInt(eachSymbolRow[0]) + ",'" + eachSymbolRow[1] + "'," + parseFloat(eachSymbolRow[2]) + ", " + parseFloat(eachSymbolRow[3]) + ", " + parseFloat(eachSymbolRow[4]) + ", " + parseFloat(eachSymbolRow[5]) + ", " + parseFloat(eachSymbolRow[6]) + ", " + change + ", " + parseFloat(eachSymbolRow[8]) + ", " + parseFloat(eachSymbolRow[9]) + ", " + parseFloat(eachSymbolRow[10]) + "),";
+};
+
+const appendToInsertDetailsQuery = (symbol, json) => {
+  symbolDetailsInsertQuery += "('" + symbol + "','" + json + "'),";
+};
+
+const trimQuery = (query) => {
+  // removes last comma
+  return query.substring(0, query.length - 1);
+};
+
+const recursiveFetch = async (symbolListProps, fetchCount) => {
+  if (symbolListProps.length == 0 || fetchCount > 10) {
+    return;
+  }
+
+  let symbolDetailsPromises = [];
+  let undefinedSymbolList = [];
+
+  for (let i = 0; i < symbolListProps.length; i++) {
+    symbolDetailsPromises.push(axios.get("https://www.dse.com.bd/displayCompany.php?name=" + symbolList[1]));
+  }
+
+  const symbolDetailsArray = await Promise.allSettled(symbolDetailsPromises);
+
+  for (let i = 0; i < symbolDetailsArray.length; i++) {
+    if (symbolDetailsArray[i]?.value?.data === undefined) {
+      console.log(i + " ❌ " + symbolList[i]);
+      undefinedSymbolList.push(symbolList[i]);
+    } else {
+      console.log(i + " ✅ " + symbolList[i]);
+      const html = symbolDetailsArray[i].value.data;
+      const jsonData = await makeJSON(html);
+      appendToInsertDetailsQuery(symbolList[i], jsonData);
+    }
+  }
+  console.log(undefinedSymbolList);
+  await recursiveFetch(undefinedSymbolList, fetchCount + 1);
+};
+
+const insertToDB = (symbolListQuery, symbolDetailsQuery) => {
+  console.log("⏳ Inserting . . .");
+  const combinedQuery = symbolListQuery + "; " + symbolDetailsQuery;
+  connection.query(combinedQuery, (err, result) => {
+    if (err) console.log(err);
+    else console.log(symbolList.length + " records inserted 🎉");
+    connection.end();
+  });
+};
+
+const fetchSymbolList = async () => {
+  console.time("🎉 Fetching complete");
+  console.log("⏳ Fetching . . .");
+  let symbolListHtml;
+  let $;
+  const symbolListUrl = "https://www.dse.com.bd/latest_share_price_scroll_l.php";
+
+  try {
+    let res = await axios(symbolListUrl);
+    symbolListHtml = res?.data;
+    $ = cheerio.load(symbolListHtml);
+  } catch (err) {
+    console.log("Symbol list fetch ERROR : " + err);
+  }
+
+  $(".table-responsive>table>tbody>tr", symbolListHtml).each((index, item) => {
+    let eachSymbolRow = $(item).text().trim().replace(/\s\s+/g, " ").replace(/,/g, "").split(" ");
+    if (eachSymbolRow[0] === "If") return false;
+
+    appendToInsertListQuery(eachSymbolRow);
+    symbolList.push(eachSymbolRow[1]);
+  });
+
+  console.log("🎉 Fetched List");
+  symbolListInsertQuery = trimQuery(symbolListInsertQuery);
+
+  await recursiveFetch(symbolList, 0);
+  console.timeEnd("🎉 Fetching complete");
+  symbolDetailsInsertQuery = trimQuery(symbolDetailsInsertQuery);
+  insertToDB(symbolListInsertQuery, symbolDetailsInsertQuery);
+};
+
 const updateDB = async () => {
-  const check_date_query = "SELECT TO_CHAR(fetched_on, 'DD/MM/YYYY') as fetched_on FROM symbol_list ORDER BY id DESC LIMIT 1;";
-  connection.query(check_date_query, function (err, result) {
+  const checkDateQuery = "SELECT TO_CHAR(fetched_on, 'DD/MM/YYYY') as fetched_on FROM symbol_list ORDER BY id DESC LIMIT 1;";
+  connection.query(checkDateQuery, (err, result) => {
     if (err) console.log(err);
     else {
       if (result.rows.length) {
-        last_fetched_on = result.rows[0].fetched_on;
-        today_date = new Date();
-        let dd = String(today_date.getDate()).padStart(2, "0");
-        let mm = String(today_date.getMonth() + 1).padStart(2, "0"); //January is 0!
-        let yyyy = today_date.getFullYear();
-        today_date = dd + "/" + mm + "/" + yyyy;
+        lastFetchedOn = result.rows[0].fetched_on;
+        todayDate = new Date();
+        let dd = String(todayDate.getDate()).padStart(2, "0");
+        let mm = String(todayDate.getMonth() + 1).padStart(2, "0"); //January is 0!
+        let yyyy = todayDate.getFullYear();
+        todayDate = dd + "/" + mm + "/" + yyyy;
       }
-      fetchSymbolList();
-      if (!result.rows.length || today_date !== last_fetched_on) {
+      if (!result.rows.length || todayDate !== lastFetchedOn) {
+        fetchSymbolList();
       } else {
-        console.log("Already up to date - " + last_fetched_on);
+        console.log("Already up to date - " + lastFetchedOn);
         connection.end();
       }
     }
@@ -441,19 +459,3 @@ connection.connect((err) => {
   console.log("DB connected 🤝");
   updateDB();
 });
-
-const test = async () => {
-  console.time("test");
-  symbol_list = await fetchSymbolList();
-  symbol_details_promises = [];
-  for (x = 0; x < 10; x++) {
-    symbol_details_promises.push(axios.get("https://www.dse.com.bd/displayCompany.php?name=" + symbol_list[x][1]));
-  }
-
-  const res = await Promise.allSettled(symbol_details_promises);
-
-  console.log(res.length, res[9]);
-  console.timeEnd("test");
-  connection.end();
-};
-// test();
