@@ -5,8 +5,8 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const connection = require("./database");
 
-let symbolListInsertQuery = "INSERT INTO test_symbol_list (id, trading_code, ltp, high, low, closep, ycp, cng, trade, value, volume) VALUES";
-let symbolDetailsInsertQuery = "INSERT INTO test_symbol_details ( symbol, data) VALUES";
+let symbolListInsertQuery = "INSERT INTO symbol_list (symbol_id, trading_code, ltp, high, low, closep, ycp, cng, trade, value, volume) VALUES";
+let symbolDetailsInsertQuery = "INSERT INTO symbol_details ( symbol, data) VALUES";
 
 let symbolList = [];
 
