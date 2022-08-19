@@ -453,7 +453,6 @@ const updateDB = async () => {
     }
   });
 };
-
 connection.connect((err) => {
   if (err) console.log(err);
   console.log("DB connected 🤝");
